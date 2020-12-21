@@ -42,22 +42,28 @@ namespace Company.Function
             // var reqPage = req.Query["page"];
             var reqPage = int.Parse(req.Headers["Page"]);
 
-            string uri = "http://stage.huilianyi.com/report/api/open/report/searchReimbursement";
+            // string uri = "http://stage.huilianyi.com/report/api/open/report/searchReimbursement";
+            var reqString = await new StreamReader(req.Body).ReadToEndAsync();
 
-            var postExpense = new Expense
-            {
-                language = "zh_cn",
-                page = reqPage,
-                size = 20,
-                startDate = "2020-01-01",
-                endDate = "2020-12-31",
-                useLastModifiedDate = "Y"
-            };
+            var reqJson = JObject.Parse(reqString);
+
+            var reqUri = reqJson["Uri"].ToString();
+            var reqBodyJson = reqJson["Body"];
+
+            // var postExpense = new Expense
+            // {
+            //     language = "zh_cn",
+            //     page = reqPage,
+            //     size = 20,
+            //     startDate = "2020-01-01",
+            //     endDate = "2020-12-31",
+            //     useLastModifiedDate = "Y"
+            // };
 
             httpClient.DefaultRequestHeaders.Clear();
             httpClient.DefaultRequestHeaders.Add("Authorization", String.Format("Bearer ac9caae1-785c-43e3-a18a-4c08a96930f9"));
 
-            using var httpResponse = await httpClient.PostAsJsonAsync(uri, postExpense);
+            using var httpResponse = await httpClient.PostAsJsonAsync(reqUri, reqBodyJson);
 
             httpResponse.EnsureSuccessStatusCode();
 
