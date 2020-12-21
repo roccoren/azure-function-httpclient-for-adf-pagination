@@ -6,23 +6,11 @@ using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using Newtonsoft.Json.Linq;
 
 namespace Company.Function
 {
-    public class Expense
-    {
-        public string language { get; set; }
-        public int page { get; set; }
-        public int size { get; set; }
-        public string startDate { get; set; }
-        public string endDate { get; set; }
-        public string useLastModifiedDate { get; set; }
-    }
-
 
     public static class httpABIExpense
     {
@@ -35,54 +23,44 @@ namespace Company.Function
         {
             log.LogInformation("C# HTTP trigger function processed a request.");
 
-            log.LogInformation(string.Format("Dump request:\n {0}", req.ToString()));
-            // parse query parameter
+            var reqString = await new StreamReader(req.Body).ReadToEndAsync(); //Read HTTP request to a string. Where 'req' is the request from HTTP Trigger of Azure Function. 
 
+            var reqJson = JObject.Parse(reqString); //Convert HTTP request string to a JSON format for procceing easily. 
 
-            // var reqPage = req.Query["page"];
-            var reqPage = int.Parse(req.Headers["Page"]);
+            var reqUri = reqJson["Uri"].ToString(); //Read RestAPI URI from HTTP request. 
+            
+            var reqBodyJson = reqJson["Body"]; //Read RestAPI required body from HTTP request.
 
-            // string uri = "http://stage.huilianyi.com/report/api/open/report/searchReimbursement";
-            var reqString = await new StreamReader(req.Body).ReadToEndAsync();
+            var reqPage = int.Parse(reqBodyJson["page"].ToString()); //Extract 'page' from HTTP request body for next pagination rule.
 
-            var reqJson = JObject.Parse(reqString);
+            var reqAuthorizationToken = req.Headers["Authorization"].ToString(); //Get Authorization token from HTTP Header.
 
-            var reqUri = reqJson["Uri"].ToString();
-            var reqBodyJson = reqJson["Body"];
+            httpClient.DefaultRequestHeaders.Clear(); //In order to inject authorization HTTP header.
+            httpClient.DefaultRequestHeaders.Add("Authorization", reqAuthorizationToken);
 
-            // var postExpense = new Expense
-            // {
-            //     language = "zh_cn",
-            //     page = reqPage,
-            //     size = 20,
-            //     startDate = "2020-01-01",
-            //     endDate = "2020-12-31",
-            //     useLastModifiedDate = "Y"
-            // };
-
-            httpClient.DefaultRequestHeaders.Clear();
-            httpClient.DefaultRequestHeaders.Add("Authorization", String.Format("Bearer ac9caae1-785c-43e3-a18a-4c08a96930f9"));
-
-            using var httpResponse = await httpClient.PostAsJsonAsync(reqUri, reqBodyJson);
+            using var httpResponse = await httpClient.PostAsJsonAsync(reqUri, reqBodyJson); //Get response after send HTTP request to the Restful API
 
             httpResponse.EnsureSuccessStatusCode();
 
-            var responseBody = await httpResponse.Content.ReadAsStringAsync();
+            var responseBody = await httpResponse.Content.ReadAsStringAsync(); //Read response.
 
-            //var responseObj = JsonSerializer.Deserialize(responseBody);
-            var responseJson = JObject.Parse(responseBody);
+            var responseJson = JObject.Parse(responseBody); //Convert response to JSON format.
 
-            var newPage = reqPage + 1;
+            var newPage = reqPage + 1; //Auto increment page number.
 
-            if (responseJson["data"].First!=null)
+            if (responseJson["data"].First != null) //Make sure that there is any data from restful API. Otherwise return HTTP 204 for ADF Pagination rules. 
             {
-                responseJson["Page"] = newPage;
+                responseJson["Page"] = newPage; //Inject newPage number to the response of Azure Function
+
+                var response = new OkObjectResult(responseJson);
+
+                response.ContentTypes.Add("application/json"); //Format response to application/json for HTTP transaction.
+
+                return response;
             }
 
-            var response = new OkObjectResult(responseJson);
-            response.ContentTypes.Add("application/json");
+            return null; //Return HTTP 204 by default.
 
-            return response;
         }
     }
 }
